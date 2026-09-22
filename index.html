@@ -2510,19 +2510,28 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // ===== Озвучка произношения через Google Translate TTS =====
     // Аудио-тег не требует CORS для воспроизведения, поэтому это работает надёжно.
+    // Важно: эндпойнт с client=gtx требует служебный токен и обычно отдаёт ошибку 403.
+    // Используем client=tw-ob — тот же публичный способ, что и в библиотеке gTTS,
+    // он не требует токена.
     function playPronunciation(text) {
         if (!text) return;
         try {
-            // У сервиса ограничение на длину строки — режем длинный текст на части по предложениям
+            // У сервиса ограничение на длину строки (до ~200 символов за запрос) —
+            // режем длинный текст на части по предложениям
             const chunks = text.match(/.{1,180}(?:[.!?]\s|$)/g) || [text];
+            const total = chunks.length;
             let i = 0;
             function playNext() {
                 if (i >= chunks.length) return;
                 const chunk = chunks[i].trim();
+                const idx = i;
                 i++;
                 if (!chunk) { playNext(); return; }
-                const url = 'https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=en&q=' +
-                    encodeURIComponent(chunk);
+                const url = 'https://translate.google.com/translate_tts' +
+                    '?ie=UTF-8&client=tw-ob&tl=en' +
+                    '&total=' + total + '&idx=' + idx +
+                    '&textlen=' + chunk.length +
+                    '&q=' + encodeURIComponent(chunk);
                 const audio = new Audio(url);
                 audio.addEventListener('ended', playNext);
                 audio.addEventListener('error', playNext);
