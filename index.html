@@ -2162,5 +2162,43 @@
         <hr />
     </div>
 </body>
+<!-- Блок управления закладками -->
+<div id="bookmark-panel" style="position: fixed; top: 10px; right: 10px; background: #f1f1f1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; z-index: 10000; font-family: sans-serif; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
+    <button id="save-bookmark" style="padding: 5px 10px; margin-right: 5px; cursor: pointer;">Поставить закладку</button>
+    <button id="go-bookmark" style="padding: 5px 10px; cursor: pointer;">К закладке</button>
+</div>
+
+<script>
+    // Уникальный ключ для этой книги (чтобы закладки разных книг не пересекались)
+    const bookKey = 'book_bookmark_' + window.location.pathname;
+
+    const saveBtn = document.getElementById('save-bookmark');
+    const goBtn = document.getElementById('go-bookmark');
+
+    // Функция сохранения текущей позиции прокрутки
+    saveBtn.addEventListener('click', () => {
+        const scrollPosition = window.scrollY || window.pageYOffset;
+        localStorage.setItem(bookKey, scrollPosition);
+        alert('Закладка успешно поставлена!');
+    });
+
+    // Функция перехода к сохраненной позиции
+    goBtn.addEventListener('click', () => {
+        const savedPosition = localStorage.getItem(bookKey);
+        if (savedPosition !== null) {
+            window.scrollTo({
+                top: parseFloat(savedPosition),
+                behavior: 'smooth' // Плавная прокрутка
+            });
+        } else {
+            alert('Закладка еще не поставлена.');
+        }
+    });
+
+    // Автоматический переход к закладке при открытии книги (по желанию)
+    // Если хотите, чтобы книга сама открывалась на нужном месте, раскомментируйте строку ниже:
+    // window.addEventListener('load', () => { const pos = localStorage.getItem(bookKey); if(pos) window.scrollTo(0, parseFloat(pos)); });
+</script>
+
 
 </html>
