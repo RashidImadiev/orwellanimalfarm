@@ -2,6 +2,8 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
     <meta name="referrer" content="no-referrer">
     <title></title>
     <style type="text/css">
@@ -39,6 +41,33 @@
             -o-transform: scaleX(-1) scaleY(-1);
             transform: scaleX(-1) scaleY(-1);
             filter: fliph + flipv;
+        }
+
+        /* Адаптивность для телефонов и планшетов */
+        @media (max-width: 600px) {
+            body {
+                font-size: 17px;
+                padding: 0 10px;
+            }
+
+            #bookmark-panel button,
+            #library-modal button,
+            #trash-modal button {
+                padding: 10px 12px !important;
+                font-size: 14px !important;
+            }
+
+            #selection-toolbar button {
+                padding: 12px 16px !important;
+                font-size: 15px !important;
+            }
+
+            #library-modal > div,
+            #trash-modal > div {
+                width: 95% !important;
+                margin: 20px auto !important;
+                max-height: 90vh !important;
+            }
         }
         -->
     </style>
@@ -2168,14 +2197,19 @@
     position: fixed; 
     top: 15px; 
     right: 15px; 
+    left: 15px;
     z-index: 10000; 
     display: flex; 
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
     background: rgba(255, 255, 255, 0.95);
     padding: 6px;
     border-radius: 6px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.15);
-    font-family: sans-serif;">
+    font-family: sans-serif;
+    max-width: calc(100vw - 30px);
+    box-sizing: border-box;">
     
     <button id="save-bookmark" style="
         padding: 8px 12px; 
@@ -2557,35 +2591,67 @@ document.addEventListener("DOMContentLoaded", function() {
         currentSelectionText = '';
     }
 
-    document.addEventListener('mouseup', function(e) {
-        // не реагировать на клик по самой панели
-        if (selectionToolbar.contains(e.target)) return;
+    function positionToolbarForSelection(range) {
+        const rect = range.getBoundingClientRect();
+        const vw = document.documentElement.clientWidth;
 
-        setTimeout(function() {
-            const selection = window.getSelection();
-            const text = selection.toString().trim();
+        // Примерная ширина/высота панели — чтобы не выехать за край экрана (актуально для телефонов)
+        const toolbarWidth = selectionToolbar.offsetWidth || 260;
+        const toolbarHeight = selectionToolbar.offsetHeight || 44;
 
-            if (!text || selection.rangeCount === 0) {
-                hideSaveBtn();
-                return;
-            }
+        // Если над выделением мало места — показываем панель под ним
+        let top;
+        if (rect.top > toolbarHeight + 12) {
+            top = window.scrollY + rect.top - toolbarHeight - 8;
+        } else {
+            top = window.scrollY + rect.bottom + 10;
+        }
 
-            // Проверяем, что выделение находится внутри текста книги
-            const range = selection.getRangeAt(0);
-            const anchorNode = range.commonAncestorContainer;
-            const container = anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
-            if (!bookContent || !bookContent.contains(container)) {
-                hideSaveBtn();
-                return;
-            }
+        let left = window.scrollX + rect.left;
+        const maxLeft = window.scrollX + vw - toolbarWidth - 8;
+        if (left > maxLeft) left = Math.max(window.scrollX + 8, maxLeft);
+        if (left < window.scrollX + 8) left = window.scrollX + 8;
 
-            currentSelectionText = text;
-            const rect = range.getBoundingClientRect();
-            selectionToolbar.style.display = 'flex';
-            selectionToolbar.style.top = (window.scrollY + rect.top - 42) + 'px';
-            selectionToolbar.style.left = (window.scrollX + rect.left) + 'px';
-        }, 0);
+        selectionToolbar.style.top = top + 'px';
+        selectionToolbar.style.left = left + 'px';
+    }
+
+    function updateToolbarFromSelection() {
+        const selection = window.getSelection();
+        const text = selection && selection.toString().trim();
+
+        if (!text || selection.rangeCount === 0) {
+            hideSaveBtn();
+            return;
+        }
+
+        // Проверяем, что выделение находится внутри текста книги
+        const range = selection.getRangeAt(0);
+        const anchorNode = range.commonAncestorContainer;
+        const container = anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
+        if (!bookContent || !bookContent.contains(container)) {
+            hideSaveBtn();
+            return;
+        }
+
+        currentSelectionText = text;
+        selectionToolbar.style.display = 'flex';
+        positionToolbarForSelection(range);
+    }
+
+    // Событие "selectionchange" срабатывает одинаково и при выделении мышью на компьютере,
+    // и при выделении пальцем / через системные "ручки" выделения на телефоне —
+    // в отличие от mouseup, который на мобильных устройствах не даёт нужного результата.
+    let selectionDebounce = null;
+    document.addEventListener('selectionchange', function() {
+        clearTimeout(selectionDebounce);
+        selectionDebounce = setTimeout(updateToolbarFromSelection, 200);
     });
+
+    // Не даём нажатию на кнопки панели сбросить выделение текста до срабатывания клика
+    // (актуально и для мыши, и особенно для сенсорных экранов)
+    selectionToolbar.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    selectionToolbar.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
 
     // Скрывать панель при скролле
     document.addEventListener('scroll', hideSaveBtn, true);
