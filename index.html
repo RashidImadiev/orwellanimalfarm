@@ -44,7 +44,7 @@
 </head>
 
 <body>
-    <div style="max-width: 800px; margin: 0 auto; text-align: left;">
+    <div id="book-content" style="max-width: 800px; margin: 0 auto; text-align: left;">
         <a name=1></a><br />
         &#160;<br />
         <b>ANIMAL FARM</b><br />
@@ -2199,6 +2199,143 @@
         font-size: 14px;">
         📖 К закладке
     </button>
+
+    <button id="open-library" style="
+        padding: 8px 12px; 
+        background-color: #6f42c1; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;">
+        📚 Открыть библиотеку
+    </button>
+
+    <button id="open-trash" style="
+        padding: 8px 12px; 
+        background-color: #6c757d; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;">
+        🗑️ Открыть корзину
+    </button>
+</div>
+
+<!-- Плавающая кнопка "Сохранить в библиотеке", появляется при выделении текста -->
+<button id="save-selection-btn" style="
+    position: absolute;
+    display: none;
+    z-index: 10001;
+    padding: 6px 10px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 13px;
+    font-family: sans-serif;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    white-space: nowrap;">
+    ⭐ Сохранить в библиотеке
+</button>
+
+<!-- Окно "Библиотека" -->
+<div id="library-modal" style="
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: rgba(0,0,0,0.5);
+    font-family: sans-serif;">
+    <div style="
+        background: #fff;
+        max-width: 700px;
+        width: 90%;
+        margin: 40px auto;
+        max-height: 85vh;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <div style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e0e0e0;">
+            <h2 style="margin: 0; font-size: 18px; color: #333;">📚 Библиотека</h2>
+            <button id="close-library" style="
+                padding: 8px 12px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 14px;">
+                ✖ Закрыть библиотеку
+            </button>
+        </div>
+        <div id="library-list" style="
+            overflow-y: auto;
+            padding: 14px 18px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #333;">
+        </div>
+    </div>
+</div>
+
+<!-- Окно "Корзина" -->
+<div id="trash-modal" style="
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10002;
+    background: rgba(0,0,0,0.5);
+    font-family: sans-serif;">
+    <div style="
+        background: #fff;
+        max-width: 700px;
+        width: 90%;
+        margin: 40px auto;
+        max-height: 85vh;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+        <div style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid #e0e0e0;">
+            <h2 style="margin: 0; font-size: 18px; color: #333;">🗑️ Корзина</h2>
+            <button id="close-trash" style="
+                padding: 8px 12px;
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 14px;">
+                ✖ Закрыть корзину
+            </button>
+        </div>
+        <div id="trash-list" style="
+            overflow-y: auto;
+            padding: 14px 18px;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #333;">
+        </div>
+    </div>
 </div>
 
 <script>
@@ -2240,5 +2377,210 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 </script>
 
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // ===== Ключи хранения (свои для каждой книги/страницы) =====
+    const storageKeyBase = window.location.pathname;
+    const LIB_KEY = 'book_library_' + storageKeyBase;
+    const TRASH_KEY = 'book_trash_' + storageKeyBase;
+
+    // ===== Утилиты хранения =====
+    function loadList(key) {
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+    function saveList(key, list) {
+        localStorage.setItem(key, JSON.stringify(list));
+    }
+
+    // ===== Перевод через бесплатный API MyMemory (без ключа) =====
+    async function translateToRussian(text) {
+        try {
+            const url = 'https://api.mymemory.translated.net/get?q=' +
+                encodeURIComponent(text) + '&langpair=en|ru';
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data && data.responseData && data.responseData.translatedText) {
+                return data.responseData.translatedText;
+            }
+            return '(не удалось перевести)';
+        } catch (e) {
+            return '(перевод недоступен — нет соединения)';
+        }
+    }
+
+    // ===== Плавающая кнопка "Сохранить в библиотеке" =====
+    const bookContent = document.getElementById('book-content');
+    const saveSelBtn = document.getElementById('save-selection-btn');
+    let currentSelectionText = '';
+
+    function hideSaveBtn() {
+        saveSelBtn.style.display = 'none';
+        currentSelectionText = '';
+    }
+
+    document.addEventListener('mouseup', function(e) {
+        // не реагировать на клик по самой кнопке
+        if (e.target === saveSelBtn) return;
+
+        setTimeout(function() {
+            const selection = window.getSelection();
+            const text = selection.toString().trim();
+
+            if (!text || selection.rangeCount === 0) {
+                hideSaveBtn();
+                return;
+            }
+
+            // Проверяем, что выделение находится внутри текста книги
+            const range = selection.getRangeAt(0);
+            const anchorNode = range.commonAncestorContainer;
+            const container = anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
+            if (!bookContent || !bookContent.contains(container)) {
+                hideSaveBtn();
+                return;
+            }
+
+            currentSelectionText = text;
+            const rect = range.getBoundingClientRect();
+            saveSelBtn.style.display = 'block';
+            saveSelBtn.style.top = (window.scrollY + rect.top - 40) + 'px';
+            saveSelBtn.style.left = (window.scrollX + rect.left) + 'px';
+        }, 0);
+    });
+
+    // Скрывать кнопку при скролле
+    document.addEventListener('scroll', hideSaveBtn, true);
+
+    saveSelBtn.addEventListener('click', async function() {
+        const text = currentSelectionText;
+        if (!text) return;
+
+        saveSelBtn.textContent = '⏳ Сохраняю...';
+        saveSelBtn.disabled = true;
+
+        const translation = await translateToRussian(text);
+
+        const library = loadList(LIB_KEY);
+        library.push({ text: text, translation: translation });
+        saveList(LIB_KEY, library);
+
+        saveSelBtn.textContent = '⭐ Сохранить в библиотеке';
+        saveSelBtn.disabled = false;
+        hideSaveBtn();
+        window.getSelection().removeAllRanges();
+    });
+
+    // ===== Библиотека =====
+    const libraryModal = document.getElementById('library-modal');
+    const libraryList = document.getElementById('library-list');
+    const openLibraryBtn = document.getElementById('open-library');
+    const closeLibraryBtn = document.getElementById('close-library');
+
+    function renderLibrary() {
+        const library = loadList(LIB_KEY);
+        libraryList.innerHTML = '';
+
+        if (library.length === 0) {
+            libraryList.innerHTML = '<p style="color:#888;">Библиотека пока пуста. Выделите текст на странице и нажмите «Сохранить в библиотеке».</p>';
+            return;
+        }
+
+        library.forEach(function(item, index) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid #eee;';
+
+            const textDiv = document.createElement('div');
+            textDiv.style.cssText = 'flex:1;';
+            textDiv.textContent = item.text + ' (' + item.translation + ')';
+
+            const delBtn = document.createElement('button');
+            delBtn.textContent = '🗑 Удалить в корзину';
+            delBtn.style.cssText = 'flex-shrink:0; padding:6px 10px; background-color:#ffc107; color:#333; border:none; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold;';
+            delBtn.addEventListener('click', function() {
+                const lib = loadList(LIB_KEY);
+                const [removed] = lib.splice(index, 1);
+                saveList(LIB_KEY, lib);
+
+                const trash = loadList(TRASH_KEY);
+                trash.push(removed);
+                saveList(TRASH_KEY, trash);
+
+                renderLibrary();
+            });
+
+            row.appendChild(textDiv);
+            row.appendChild(delBtn);
+            libraryList.appendChild(row);
+        });
+    }
+
+    openLibraryBtn.addEventListener('click', function() {
+        renderLibrary();
+        libraryModal.style.display = 'block';
+    });
+    closeLibraryBtn.addEventListener('click', function() {
+        libraryModal.style.display = 'none';
+    });
+    libraryModal.addEventListener('click', function(e) {
+        if (e.target === libraryModal) libraryModal.style.display = 'none';
+    });
+
+    // ===== Корзина =====
+    const trashModal = document.getElementById('trash-modal');
+    const trashList = document.getElementById('trash-list');
+    const openTrashBtn = document.getElementById('open-trash');
+    const closeTrashBtn = document.getElementById('close-trash');
+
+    function renderTrash() {
+        const trash = loadList(TRASH_KEY);
+        trashList.innerHTML = '';
+
+        if (trash.length === 0) {
+            trashList.innerHTML = '<p style="color:#888;">Корзина пуста.</p>';
+            return;
+        }
+
+        trash.forEach(function(item, index) {
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid #eee;';
+
+            const delBtn = document.createElement('button');
+            delBtn.textContent = '✕';
+            delBtn.title = 'Удалить навсегда';
+            delBtn.style.cssText = 'flex-shrink:0; width:26px; height:26px; padding:0; background-color:#dc3545; color:white; border:none; border-radius:50%; cursor:pointer; font-size:14px; font-weight:bold; line-height:1;';
+            delBtn.addEventListener('click', function() {
+                const t = loadList(TRASH_KEY);
+                t.splice(index, 1);
+                saveList(TRASH_KEY, t);
+                renderTrash();
+            });
+
+            const textDiv = document.createElement('div');
+            textDiv.style.cssText = 'flex:1;';
+            textDiv.textContent = item.text + ' (' + item.translation + ')';
+
+            row.appendChild(delBtn);
+            row.appendChild(textDiv);
+            trashList.appendChild(row);
+        });
+    }
+
+    openTrashBtn.addEventListener('click', function() {
+        renderTrash();
+        trashModal.style.display = 'block';
+    });
+    closeTrashBtn.addEventListener('click', function() {
+        trashModal.style.display = 'none';
+    });
+    trashModal.addEventListener('click', function(e) {
+        if (e.target === trashModal) trashModal.style.display = 'none';
+    });
+});
+</script>
 
 </html>
