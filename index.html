@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta name="referrer" content="no-referrer">
     <title></title>
     <style type="text/css">
         <!--
@@ -2533,6 +2534,7 @@ document.addEventListener("DOMContentLoaded", function() {
                     '&textlen=' + chunk.length +
                     '&q=' + encodeURIComponent(chunk);
                 const audio = new Audio(url);
+                audio.referrerPolicy = 'no-referrer';
                 audio.addEventListener('ended', playNext);
                 audio.addEventListener('error', playNext);
                 audio.play().catch(function() { playNext(); });
