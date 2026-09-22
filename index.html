@@ -2162,42 +2162,82 @@
         <hr />
     </div>
 </body>
-<!-- Блок управления закладками -->
-<div id="bookmark-panel" style="position: fixed; top: 10px; right: 10px; background: #f1f1f1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; z-index: 10000; font-family: sans-serif; box-shadow: 0 2px 5px rgba(0,0,0,0.2);">
-    <button id="save-bookmark" style="padding: 5px 10px; margin-right: 5px; cursor: pointer;">Поставить закладку</button>
-    <button id="go-bookmark" style="padding: 5px 10px; cursor: pointer;">К закладке</button>
+<!-- Панель управления закладками (зафиксирована в ПРАВОМ ВЕРХНЕМ углу) -->
+<div id="bookmark-panel" style="
+    position: fixed; 
+    top: 15px; 
+    right: 15px; 
+    z-index: 10000; 
+    display: flex; 
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 6px;
+    border-radius: 6px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    font-family: sans-serif;">
+    
+    <button id="save-bookmark" style="
+        padding: 8px 12px; 
+        background-color: #28a745; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;">
+        📌 Поставить закладку
+    </button>
+    
+    <button id="go-bookmark" style="
+        padding: 8px 12px; 
+        background-color: #007bff; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;">
+        📖 К закладке
+    </button>
 </div>
 
 <script>
-    // Уникальный ключ для этой книги (чтобы закладки разных книг не пересекались)
-    const bookKey = 'book_bookmark_' + window.location.pathname;
-
+document.addEventListener("DOMContentLoaded", function() {
     const saveBtn = document.getElementById('save-bookmark');
     const goBtn = document.getElementById('go-bookmark');
+    
+    // Уникальный ключ для сохранения позиции этой конкретной книги
+    const storageKey = 'book_scroll_position_' + window.location.pathname;
 
-    // Функция сохранения текущей позиции прокрутки
-    saveBtn.addEventListener('click', () => {
-        const scrollPosition = window.scrollY || window.pageYOffset;
-        localStorage.setItem(bookKey, scrollPosition);
-        alert('Закладка успешно поставлена!');
+    // 1. Кнопка «Поставить закладку»
+    saveBtn.addEventListener('click', function() {
+        const currentScroll = window.scrollY || window.pageYOffset;
+        localStorage.setItem(storageKey, currentScroll);
+        
+        // Быстрое визуальное подтверждение без всплывающих окон
+        const originalBg = saveBtn.style.backgroundColor;
+        saveBtn.style.backgroundColor = '#1e7e34';
+        saveBtn.textContent = '✅ Сохранено!';
+        setTimeout(() => {
+            saveBtn.style.backgroundColor = originalBg;
+            saveBtn.textContent = '📌 Поставить закладку';
+        }, 1000);
     });
 
-    // Функция перехода к сохраненной позиции
-    goBtn.addEventListener('click', () => {
-        const savedPosition = localStorage.getItem(bookKey);
-        if (savedPosition !== null) {
+    // 2. Кнопка «К закладке»
+    goBtn.addEventListener('click', function() {
+        const savedScroll = localStorage.getItem(storageKey);
+        
+        if (savedScroll !== null) {
             window.scrollTo({
-                top: parseFloat(savedPosition),
-                behavior: 'smooth' // Плавная прокрутка
+                top: parseFloat(savedScroll),
+                behavior: 'smooth'
             });
         } else {
-            alert('Закладка еще не поставлена.');
+            alert('Закладка еще не создана. Сначала нажмите "Поставить закладку".');
         }
     });
-
-    // Автоматический переход к закладке при открытии книги (по желанию)
-    // Если хотите, чтобы книга сама открывалась на нужном месте, раскомментируйте строку ниже:
-    // window.addEventListener('load', () => { const pos = localStorage.getItem(bookKey); if(pos) window.scrollTo(0, parseFloat(pos)); });
+});
 </script>
 
 
