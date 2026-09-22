@@ -2225,24 +2225,41 @@
     </button>
 </div>
 
-<!-- Плавающая кнопка "Сохранить в библиотеке", появляется при выделении текста -->
-<button id="save-selection-btn" style="
+<!-- Плавающая панель "Сохранить / Прослушать", появляется при выделении текста -->
+<div id="selection-toolbar" style="
     position: absolute;
     display: none;
     z-index: 10001;
-    padding: 6px 10px;
-    background-color: #28a745;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 13px;
+    gap: 6px;
     font-family: sans-serif;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
     white-space: nowrap;">
-    ⭐ Сохранить в библиотеке
-</button>
+    <button id="save-selection-btn" style="
+        padding: 6px 10px;
+        background-color: #28a745;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        white-space: nowrap;">
+        ⭐ Сохранить в библиотеке
+    </button>
+    <button id="listen-selection-btn" style="
+        padding: 6px 10px;
+        background-color: #17a2b8;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        white-space: nowrap;">
+        🔊 Прослушать
+    </button>
+</div>
 
 <!-- Окно "Библиотека" -->
 <div id="library-modal" style="
@@ -2397,35 +2414,141 @@ document.addEventListener("DOMContentLoaded", function() {
         localStorage.setItem(key, JSON.stringify(list));
     }
 
-    // ===== Перевод через бесплатный API MyMemory (без ключа) =====
-    async function translateToRussian(text) {
+    // ===== Перевод через Google Translate (публичный веб-эндпоинт, без ключа) =====
+    // dt=t   — перевод по смыслу (учитывает контекст всей фразы/предложения)
+    // dt=bd  — «словарь»: несколько вариантов перевода по частям речи (для одиночных слов)
+    async function translateWithGoogle(text, isSingleWord) {
         try {
-            const url = 'https://api.mymemory.translated.net/get?q=' +
-                encodeURIComponent(text) + '&langpair=en|ru';
+            let url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t';
+            if (isSingleWord) url += '&dt=bd';
+            url += '&q=' + encodeURIComponent(text);
+
             const resp = await fetch(url);
             const data = await resp.json();
-            if (data && data.responseData && data.responseData.translatedText) {
-                return data.responseData.translatedText;
+
+            // Перевод по смыслу — собираем из сегментов ответа
+            let translation = '';
+            if (Array.isArray(data) && Array.isArray(data[0])) {
+                translation = data[0].map(function(seg) {
+                    return (seg && seg[0]) ? seg[0] : '';
+                }).join('');
             }
-            return '(не удалось перевести)';
+            translation = translation.trim();
+
+            // Дополнительные варианты значений (только для одиночного слова)
+            let variants = null;
+            if (isSingleWord && Array.isArray(data[1])) {
+                const seen = new Set();
+                if (translation) seen.add(translation.toLowerCase());
+                const list = [];
+                data[1].forEach(function(posEntry) {
+                    if (Array.isArray(posEntry) && Array.isArray(posEntry[1])) {
+                        posEntry[1].forEach(function(w) {
+                            const key = String(w).toLowerCase();
+                            if (w && !seen.has(key)) {
+                                seen.add(key);
+                                list.push(w);
+                            }
+                        });
+                    }
+                });
+                if (list.length > 0) variants = list.slice(0, 8);
+            }
+
+            return {
+                translation: translation || '(не удалось перевести)',
+                variants: variants
+            };
         } catch (e) {
-            return '(перевод недоступен — нет соединения)';
+            return { translation: '(перевод недоступен — нет соединения)', variants: null };
         }
     }
 
-    // ===== Плавающая кнопка "Сохранить в библиотеке" =====
+    // ===== Транскрипция произношения через Wiktionary (для фраз из 3 слов и менее) =====
+    // Берём "сырой" wikitext страницы — там IPA всегда записана в чётком шаблоне
+    // {{IPA|en|/.../}}, в отличие от HTML-вёрстки, которая часто меняется.
+    async function getWordIPA(word) {
+        const clean = word.replace(/[^a-zA-Z'-]/g, '');
+        if (!clean) return null;
+        try {
+            const url = 'https://en.wiktionary.org/w/api.php?action=parse&page=' +
+                encodeURIComponent(clean.toLowerCase()) +
+                '&prop=wikitext&format=json&formatversion=2&origin=*';
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (!data || !data.parse || typeof data.parse.wikitext !== 'string') return null;
+            const wikitext = data.parse.wikitext;
+
+            // Ограничиваем поиск разделом "English" (у слова может быть несколько языков)
+            const engMatch = wikitext.match(/==\s*English\s*==([\s\S]*?)(?:\n==[^=]|$)/);
+            const section = engMatch ? engMatch[1] : wikitext;
+
+            const ipaMatch = section.match(/\{\{IPA\|en\|([^}]+)\}\}/);
+            if (!ipaMatch) return null;
+
+            const pieces = ipaMatch[1].split('|').map(function(s) { return s.trim(); });
+            const ipa = pieces.find(function(p) { return p.indexOf('/') === 0 || p.indexOf('[') === 0; });
+            return ipa || null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function getTranscription(text) {
+        const words = text.trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0 || words.length > 3) return null;
+
+        const parts = await Promise.all(words.map(getWordIPA));
+        const found = parts.filter(Boolean);
+
+        if (found.length === 0) {
+            return null;
+        }
+        return parts.map(function(p, i) { return p || words[i]; }).join(' ');
+    }
+
+    // ===== Озвучка произношения через Google Translate TTS =====
+    // Аудио-тег не требует CORS для воспроизведения, поэтому это работает надёжно.
+    function playPronunciation(text) {
+        if (!text) return;
+        try {
+            // У сервиса ограничение на длину строки — режем длинный текст на части по предложениям
+            const chunks = text.match(/.{1,180}(?:[.!?]\s|$)/g) || [text];
+            let i = 0;
+            function playNext() {
+                if (i >= chunks.length) return;
+                const chunk = chunks[i].trim();
+                i++;
+                if (!chunk) { playNext(); return; }
+                const url = 'https://translate.googleapis.com/translate_tts?ie=UTF-8&client=gtx&tl=en&q=' +
+                    encodeURIComponent(chunk);
+                const audio = new Audio(url);
+                audio.addEventListener('ended', playNext);
+                audio.addEventListener('error', playNext);
+                audio.play().catch(function() { playNext(); });
+            }
+            playNext();
+        } catch (e) {
+            // тихо игнорируем — озвучка необязательна
+        }
+    }
+
+    // ===== Плавающая панель "Сохранить / Прослушать" =====
     const bookContent = document.getElementById('book-content');
+    const selectionToolbar = document.getElementById('selection-toolbar');
     const saveSelBtn = document.getElementById('save-selection-btn');
+    const listenSelBtn = document.getElementById('listen-selection-btn');
     let currentSelectionText = '';
 
     function hideSaveBtn() {
-        saveSelBtn.style.display = 'none';
+        selectionToolbar.style.display = 'none';
         currentSelectionText = '';
     }
 
     document.addEventListener('mouseup', function(e) {
-        // не реагировать на клик по самой кнопке
-        if (e.target === saveSelBtn) return;
+        // не реагировать на клик по самой панели
+        if (selectionToolbar.contains(e.target)) return;
 
         setTimeout(function() {
             const selection = window.getSelection();
@@ -2447,14 +2570,18 @@ document.addEventListener("DOMContentLoaded", function() {
 
             currentSelectionText = text;
             const rect = range.getBoundingClientRect();
-            saveSelBtn.style.display = 'block';
-            saveSelBtn.style.top = (window.scrollY + rect.top - 40) + 'px';
-            saveSelBtn.style.left = (window.scrollX + rect.left) + 'px';
+            selectionToolbar.style.display = 'flex';
+            selectionToolbar.style.top = (window.scrollY + rect.top - 42) + 'px';
+            selectionToolbar.style.left = (window.scrollX + rect.left) + 'px';
         }, 0);
     });
 
-    // Скрывать кнопку при скролле
+    // Скрывать панель при скролле
     document.addEventListener('scroll', hideSaveBtn, true);
+
+    listenSelBtn.addEventListener('click', function() {
+        playPronunciation(currentSelectionText);
+    });
 
     saveSelBtn.addEventListener('click', async function() {
         const text = currentSelectionText;
@@ -2463,10 +2590,22 @@ document.addEventListener("DOMContentLoaded", function() {
         saveSelBtn.textContent = '⏳ Сохраняю...';
         saveSelBtn.disabled = true;
 
-        const translation = await translateToRussian(text);
+        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+        const isSingleWord = wordCount === 1;
+
+        const result = await translateWithGoogle(text, isSingleWord);
+
+        let transcription = null;
+        if (wordCount <= 3) {
+            transcription = await getTranscription(text);
+        }
+
+        const entry = { text: text, translation: result.translation };
+        if (result.variants && result.variants.length) entry.variants = result.variants;
+        if (transcription) entry.transcription = transcription;
 
         const library = loadList(LIB_KEY);
-        library.push({ text: text, translation: translation });
+        library.push(entry);
         saveList(LIB_KEY, library);
 
         saveSelBtn.textContent = '⭐ Сохранить в библиотеке';
@@ -2474,6 +2613,49 @@ document.addEventListener("DOMContentLoaded", function() {
         hideSaveBtn();
         window.getSelection().removeAllRanges();
     });
+
+    // ===== Общий рендер строки: фраза / перевод / транскрипция =====
+    function buildEntryLines(item) {
+        const wrap = document.createElement('div');
+
+        const enLine = document.createElement('div');
+        enLine.style.cssText = 'font-weight: bold; color: #222;';
+        enLine.textContent = item.text;
+        wrap.appendChild(enLine);
+
+        const ruLine = document.createElement('div');
+        ruLine.style.cssText = 'color: #555;';
+        ruLine.textContent = item.translation;
+        wrap.appendChild(ruLine);
+
+        if (item.variants && item.variants.length) {
+            const varLine = document.createElement('div');
+            varLine.style.cssText = 'color: #6f42c1; font-size: 13px;';
+            varLine.textContent = 'Другие значения: ' + item.variants.join(', ');
+            wrap.appendChild(varLine);
+        }
+
+        if (item.transcription) {
+            const trLine = document.createElement('div');
+            trLine.style.cssText = 'color: #888; font-style: italic;';
+            trLine.textContent = item.transcription;
+            wrap.appendChild(trLine);
+        }
+
+        return wrap;
+    }
+
+    // ===== Кнопка озвучки для строки =====
+    function makeSpeakBtn(text) {
+        const btn = document.createElement('button');
+        btn.textContent = '🔊';
+        btn.title = 'Прослушать произношение';
+        btn.style.cssText = 'flex-shrink:0; padding:6px 9px; background-color:#17a2b8; color:white; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
+        btn.addEventListener('click', function() {
+            playPronunciation(text);
+        });
+        return btn;
+    }
 
     // ===== Библиотека =====
     const libraryModal = document.getElementById('library-modal');
@@ -2494,9 +2676,10 @@ document.addEventListener("DOMContentLoaded", function() {
             const row = document.createElement('div');
             row.style.cssText = 'display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid #eee;';
 
-            const textDiv = document.createElement('div');
+            const textDiv = buildEntryLines(item);
             textDiv.style.cssText = 'flex:1;';
-            textDiv.textContent = item.text + ' (' + item.translation + ')';
+
+            const speakBtn = makeSpeakBtn(item.text);
 
             const delBtn = document.createElement('button');
             delBtn.textContent = '🗑 Удалить в корзину';
@@ -2514,6 +2697,7 @@ document.addEventListener("DOMContentLoaded", function() {
             });
 
             row.appendChild(textDiv);
+            row.appendChild(speakBtn);
             row.appendChild(delBtn);
             libraryList.appendChild(row);
         });
@@ -2560,11 +2744,13 @@ document.addEventListener("DOMContentLoaded", function() {
                 renderTrash();
             });
 
-            const textDiv = document.createElement('div');
+            const textDiv = buildEntryLines(item);
             textDiv.style.cssText = 'flex:1;';
-            textDiv.textContent = item.text + ' (' + item.translation + ')';
+
+            const speakBtn = makeSpeakBtn(item.text);
 
             row.appendChild(delBtn);
+            row.appendChild(speakBtn);
             row.appendChild(textDiv);
             trashList.appendChild(row);
         });
