@@ -2650,8 +2650,11 @@ document.addEventListener("DOMContentLoaded", function() {
 
     // Не даём нажатию на кнопки панели сбросить выделение текста до срабатывания клика
     // (актуально и для мыши, и особенно для сенсорных экранов)
+    // Не даём нажатию мышью на панель сбросить выделение текста до срабатывания клика.
+    // Важно: НЕ делаем то же самое для touchstart — preventDefault() там отменяет
+    // последующее событие click на мобильных устройствах, из-за чего кнопки
+    // переставали бы реагировать на нажатие пальцем.
     selectionToolbar.addEventListener('mousedown', function(e) { e.preventDefault(); });
-    selectionToolbar.addEventListener('touchstart', function(e) { e.preventDefault(); }, { passive: false });
 
     // Скрывать панель при скролле
     document.addEventListener('scroll', hideSaveBtn, true);
