@@ -2201,7 +2201,7 @@
     z-index: 10000; 
     display: flex; 
     flex-wrap: wrap;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 6px;
     background: rgba(255, 255, 255, 0.95);
     padding: 6px;
@@ -2220,7 +2220,7 @@
         cursor: pointer;
         font-weight: bold;
         font-size: 14px;">
-        📌 Поставить закладку
+        Новая закладка
     </button>
     
     <button id="go-bookmark" style="
@@ -2232,7 +2232,7 @@
         cursor: pointer;
         font-weight: bold;
         font-size: 14px;">
-        📖 К закладке
+        К закладке
     </button>
 
     <button id="open-library" style="
@@ -2244,7 +2244,7 @@
         cursor: pointer;
         font-weight: bold;
         font-size: 14px;">
-        📚 Открыть библиотеку
+        Словарь
     </button>
 
     <button id="open-trash" style="
@@ -2256,7 +2256,7 @@
         cursor: pointer;
         font-weight: bold;
         font-size: 14px;">
-        🗑️ Открыть корзину
+        Корзина
     </button>
 </div>
 
@@ -2279,7 +2279,7 @@
         font-size: 13px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.25);
         white-space: nowrap;">
-        ⭐ Сохранить в библиотеке
+        ⭐ Сохранить
     </button>
     <button id="listen-selection-btn" style="
         padding: 6px 10px;
@@ -2294,6 +2294,55 @@
         white-space: nowrap;">
         🔊 Прослушать
     </button>
+</div>
+
+<!-- Всплывающее окно с транскрипцией и вариантами перевода одиночного слова -->
+<div id="word-popup" style="
+    position: absolute;
+    display: none;
+    z-index: 10001;
+    min-width: 160px;
+    max-width: 260px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    font-family: sans-serif;
+    padding: 10px 12px;
+    box-sizing: border-box;">
+    <div id="word-popup-transcription-row" style="
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 6px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid #eee;">
+        <span id="word-popup-transcription" style="
+            font-style: italic;
+            color: #555;
+            font-size: 14px;
+            flex: 1;">…</span>
+        <button id="word-popup-speak-btn" title="Прослушать произношение" style="
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;">
+            🔊
+        </button>
+    </div>
+    <div id="word-popup-variants" style="
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 14px;
+        color: #333;">
+        …
+    </div>
 </div>
 
 <!-- Окно "Библиотека" -->
@@ -2321,17 +2370,30 @@
             padding: 14px 18px;
             border-bottom: 1px solid #e0e0e0;">
             <h2 style="margin: 0; font-size: 18px; color: #333;">📚 Библиотека</h2>
-            <button id="close-library" style="
-                padding: 8px 12px;
-                background-color: #dc3545;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: bold;
-                font-size: 14px;">
-                ✖ Закрыть библиотеку
-            </button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="download-library" style="
+                    padding: 8px 12px;
+                    background-color: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    font-size: 14px;">
+                    ⬇️ Скачать
+                </button>
+                <button id="close-library" style="
+                    padding: 8px 12px;
+                    background-color: #dc3545;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-weight: bold;
+                    font-size: 14px;">
+                    ✖ Закрыть словарь
+                </button>
+            </div>
         </div>
         <div id="library-list" style="
             overflow-y: auto;
@@ -2398,7 +2460,7 @@ document.addEventListener("DOMContentLoaded", function() {
     // Уникальный ключ для сохранения позиции этой конкретной книги
     const storageKey = 'book_scroll_position_' + window.location.pathname;
 
-    // 1. Кнопка «Поставить закладку»
+    // 1. Кнопка «Новая закладка»
     saveBtn.addEventListener('click', function() {
         const currentScroll = window.scrollY || window.pageYOffset;
         localStorage.setItem(storageKey, currentScroll);
@@ -2409,7 +2471,7 @@ document.addEventListener("DOMContentLoaded", function() {
         saveBtn.textContent = '✅ Сохранено!';
         setTimeout(() => {
             saveBtn.style.backgroundColor = originalBg;
-            saveBtn.textContent = '📌 Поставить закладку';
+            saveBtn.textContent = 'Новая закладка';
         }, 1000);
     });
 
@@ -2423,7 +2485,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 behavior: 'smooth'
             });
         } else {
-            alert('Закладка еще не создана. Сначала нажмите "Поставить закладку".');
+            alert('Закладка еще не создана. Сначала нажмите "Новая закладка".');
         }
     });
 });
@@ -2437,16 +2499,53 @@ document.addEventListener("DOMContentLoaded", function() {
     const TRASH_KEY = 'book_trash_' + storageKeyBase;
 
     // ===== Утилиты хранения =====
+    // На случай, если localStorage недоступен (например, приватный режим Safari) —
+    // работаем во временной памяти на время сеанса и один раз предупреждаем пользователя,
+    // вместо того чтобы молча терять его сохранённые фразы.
+    let storageWarningShown = false;
+    const memoryFallback = {};
+
+    function isStorageWritable() {
+        try {
+            const testKey = '__storage_test__';
+            localStorage.setItem(testKey, '1');
+            localStorage.removeItem(testKey);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+    const storageOk = isStorageWritable();
+
+    function warnStorageOnce() {
+        if (storageWarningShown) return;
+        storageWarningShown = true;
+        alert('Внимание: в этом браузере (возможно, включён приватный/инкогнито-режим) не удаётся сохранить данные на устройстве. Библиотека и корзина будут работать только до закрытия страницы.');
+    }
+
     function loadList(key) {
+        if (!storageOk) {
+            return memoryFallback[key] ? memoryFallback[key].slice() : [];
+        }
         try {
             const raw = localStorage.getItem(key);
             return raw ? JSON.parse(raw) : [];
         } catch (e) {
-            return [];
+            return memoryFallback[key] ? memoryFallback[key].slice() : [];
         }
     }
     function saveList(key, list) {
-        localStorage.setItem(key, JSON.stringify(list));
+        if (!storageOk) {
+            memoryFallback[key] = list.slice();
+            warnStorageOnce();
+            return;
+        }
+        try {
+            localStorage.setItem(key, JSON.stringify(list));
+        } catch (e) {
+            memoryFallback[key] = list.slice();
+            warnStorageOnce();
+        }
     }
 
     // ===== Перевод через Google Translate (публичный веб-эндпоинт, без ключа) =====
@@ -2543,17 +2642,42 @@ document.addEventListener("DOMContentLoaded", function() {
         return parts.map(function(p, i) { return p || words[i]; }).join(' ');
     }
 
-    // ===== Озвучка произношения через Google Translate TTS =====
-    // Аудио-тег не требует CORS для воспроизведения, поэтому это работает надёжно.
-    // Важно: эндпойнт с client=gtx требует служебный токен и обычно отдаёт ошибку 403.
-    // Используем client=tw-ob — тот же публичный способ, что и в библиотеке gTTS,
-    // он не требует токена.
+    // ===== Озвучка произношения =====
+    // Основной способ — встроенный в браузер Web Speech API (speechSynthesis):
+    // работает без сети, без ограничений на длину текста и без капризов
+    // автовоспроизведения в Safari. Поддерживается всеми современными браузерами.
+    // Если он почему-то недоступен — используем запасной вариант через Google Translate TTS.
     function playPronunciation(text) {
         if (!text) return;
+        const clean = text.replace(/\s+/g, ' ').trim();
+        if (!clean) return;
+
+        if ('speechSynthesis' in window) {
+            try {
+                window.speechSynthesis.cancel(); // прервать предыдущую озвучку, если играет
+                const utterance = new SpeechSynthesisUtterance(clean);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.95;
+                utterance.onerror = function() {
+                    playPronunciationViaGoogle(clean);
+                };
+                window.speechSynthesis.speak(utterance);
+                return;
+            } catch (e) {
+                // если что-то пошло не так — используем запасной способ ниже
+            }
+        }
+        playPronunciationViaGoogle(clean);
+    }
+
+    // Запасной способ озвучки — через публичный эндпойнт Google Translate TTS
+    // (client=tw-ob — тот же способ, что использует библиотека gTTS, не требует токена).
+    function playPronunciationViaGoogle(text) {
         try {
-            // У сервиса ограничение на длину строки (до ~200 символов за запрос) —
-            // режем длинный текст на части по предложениям
-            const chunks = text.match(/.{1,180}(?:[.!?]\s|$)/g) || [text];
+            // ВАЖНО: используем [\s\S] вместо "." — точка в регулярных выражениях
+            // не совпадает с переносом строки, из-за чего при многострочном
+            // выделении озвучивался бы только кусок текста после последнего переноса.
+            const chunks = text.match(/[\s\S]{1,180}(?:[.!?]\s|$)/g) || [text];
             const total = chunks.length;
             let i = 0;
             function playNext() {
@@ -2586,35 +2710,123 @@ document.addEventListener("DOMContentLoaded", function() {
     const listenSelBtn = document.getElementById('listen-selection-btn');
     let currentSelectionText = '';
 
+    // ===== Всплывающее окно с транскрипцией/переводом одиночного слова =====
+    const wordPopup = document.getElementById('word-popup');
+    const wordPopupTranscription = document.getElementById('word-popup-transcription');
+    const wordPopupVariants = document.getElementById('word-popup-variants');
+    const wordPopupSpeakBtn = document.getElementById('word-popup-speak-btn');
+    let currentPopupWord = '';
+    let wordRequestToken = 0;
+
+    function hideWordPopup() {
+        wordPopup.style.display = 'none';
+        currentPopupWord = '';
+        wordRequestToken++; // делает недействительными все ещё не завершённые запросы
+    }
+
     function hideSaveBtn() {
         selectionToolbar.style.display = 'none';
         currentSelectionText = '';
+        hideWordPopup();
     }
 
-    function positionToolbarForSelection(range) {
-        const rect = range.getBoundingClientRect();
-        const vw = document.documentElement.clientWidth;
+    // Последний известный прямоугольник выделения (в координатах окна, без учёта скролла) —
+    // нужен, чтобы пересчитать позицию после того, как содержимое всплывающего окна
+    // подгрузится и его высота изменится.
+    let lastSelectionRect = null;
+    let lastShowPopup = false;
 
-        // Примерная ширина/высота панели — чтобы не выехать за край экрана (актуально для телефонов)
+    // Панель "Сохранить/Прослушать" и всплывающее окно слова считаем одним блоком
+    // и ставим его целиком либо выше, либо ниже выделения — чтобы само выделенное
+    // слово никогда не оказывалось закрыто этим блоком.
+    function positionUI(rect, showPopup) {
+        lastSelectionRect = rect;
+        lastShowPopup = showPopup;
+
+        const vw = document.documentElement.clientWidth;
+        const vh = window.innerHeight;
+        const gap = 6;
+
         const toolbarWidth = selectionToolbar.offsetWidth || 260;
         const toolbarHeight = selectionToolbar.offsetHeight || 44;
+        const popupWidth = showPopup ? (wordPopup.offsetWidth || 220) : 0;
+        const popupHeight = showPopup ? (wordPopup.offsetHeight || 90) : 0;
 
-        // Если над выделением мало места — показываем панель под ним
-        let top;
-        if (rect.top > toolbarHeight + 12) {
-            top = window.scrollY + rect.top - toolbarHeight - 8;
+        const blockHeight = toolbarHeight + (showPopup ? gap + popupHeight : 0);
+        const spaceAbove = rect.top;
+        const spaceBelow = vh - rect.bottom;
+
+        let blockTop;
+        if (spaceBelow >= blockHeight + 12) {
+            blockTop = window.scrollY + rect.bottom + 8;
+        } else if (spaceAbove >= blockHeight + 12) {
+            blockTop = window.scrollY + rect.top - 8 - blockHeight;
+        } else if (spaceBelow >= spaceAbove) {
+            blockTop = window.scrollY + rect.bottom + 8;
         } else {
-            top = window.scrollY + rect.bottom + 10;
+            blockTop = window.scrollY + rect.top - 8 - blockHeight;
         }
 
+        const widest = Math.max(toolbarWidth, popupWidth);
         let left = window.scrollX + rect.left;
-        const maxLeft = window.scrollX + vw - toolbarWidth - 8;
+        const maxLeft = window.scrollX + vw - widest - 8;
         if (left > maxLeft) left = Math.max(window.scrollX + 8, maxLeft);
         if (left < window.scrollX + 8) left = window.scrollX + 8;
 
-        selectionToolbar.style.top = top + 'px';
+        selectionToolbar.style.top = blockTop + 'px';
         selectionToolbar.style.left = left + 'px';
+
+        if (showPopup) {
+            wordPopup.style.top = (blockTop + toolbarHeight + gap) + 'px';
+            wordPopup.style.left = left + 'px';
+        }
     }
+
+    async function showWordPopupFor(word) {
+        const myToken = ++wordRequestToken;
+        currentPopupWord = word;
+
+        wordPopupTranscription.textContent = '…';
+        wordPopupVariants.textContent = 'Перевод…';
+        wordPopup.style.display = 'block';
+        if (lastSelectionRect) positionUI(lastSelectionRect, true);
+
+        const [result, transcription] = await Promise.all([
+            translateWithGoogle(word, true),
+            getTranscription(word)
+        ]);
+
+        // Если пользователь уже выделил что-то другое — этот ответ больше не актуален
+        if (myToken !== wordRequestToken) return;
+
+        wordPopupTranscription.textContent = transcription || '(транскрипция не найдена)';
+
+        const allVariants = [];
+        if (result.translation) allVariants.push(result.translation);
+        if (result.variants && result.variants.length) {
+            result.variants.forEach(function(v) {
+                if (allVariants.indexOf(v) === -1) allVariants.push(v);
+            });
+        }
+
+        wordPopupVariants.innerHTML = '';
+        if (allVariants.length === 0) {
+            wordPopupVariants.textContent = '(перевод не найден)';
+        } else {
+            allVariants.forEach(function(v) {
+                const line = document.createElement('div');
+                line.textContent = v;
+                wordPopupVariants.appendChild(line);
+            });
+        }
+
+        // Высота окна могла измениться после подгрузки контента — пересчитываем позицию
+        if (lastSelectionRect) positionUI(lastSelectionRect, true);
+    }
+
+    wordPopupSpeakBtn.addEventListener('click', function() {
+        playPronunciation(currentPopupWord);
+    });
 
     function updateToolbarFromSelection() {
         const selection = window.getSelection();
@@ -2634,9 +2846,21 @@ document.addEventListener("DOMContentLoaded", function() {
             return;
         }
 
-        currentSelectionText = text;
+        const cleanText = text.replace(/\s+/g, ' ').trim();
+        currentSelectionText = cleanText;
         selectionToolbar.style.display = 'flex';
-        positionToolbarForSelection(range);
+
+        const rect = range.getBoundingClientRect();
+        const words = cleanText.split(' ').filter(Boolean);
+        const isSingleWord = words.length === 1;
+
+        if (!isSingleWord) hideWordPopup();
+        positionUI(rect, isSingleWord);
+
+        // Для одиночного слова сразу показываем всплывающее окно с транскрипцией и переводом
+        if (isSingleWord && cleanText !== currentPopupWord) {
+            showWordPopupFor(cleanText);
+        }
     }
 
     // Событие "selectionchange" срабатывает одинаково и при выделении мышью на компьютере,
@@ -2655,6 +2879,7 @@ document.addEventListener("DOMContentLoaded", function() {
     // последующее событие click на мобильных устройствах, из-за чего кнопки
     // переставали бы реагировать на нажатие пальцем.
     selectionToolbar.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    wordPopup.addEventListener('mousedown', function(e) { e.preventDefault(); });
 
     // Скрывать панель при скролле
     document.addEventListener('scroll', hideSaveBtn, true);
@@ -2688,7 +2913,7 @@ document.addEventListener("DOMContentLoaded", function() {
         library.push(entry);
         saveList(LIB_KEY, library);
 
-        saveSelBtn.textContent = '⭐ Сохранить в библиотеке';
+        saveSelBtn.textContent = '⭐ Сохранить';
         saveSelBtn.disabled = false;
         hideSaveBtn();
         window.getSelection().removeAllRanges();
@@ -2742,13 +2967,45 @@ document.addEventListener("DOMContentLoaded", function() {
     const libraryList = document.getElementById('library-list');
     const openLibraryBtn = document.getElementById('open-library');
     const closeLibraryBtn = document.getElementById('close-library');
+    const downloadLibraryBtn = document.getElementById('download-library');
+
+    function downloadLibraryAsText() {
+        const library = loadList(LIB_KEY);
+        if (library.length === 0) {
+            alert('Библиотека пуста — скачивать нечего.');
+            return;
+        }
+
+        let content = '';
+        library.forEach(function(item, index) {
+            content += (index + 1) + '. ' + item.text + '\n';
+            content += '   Перевод: ' + item.translation + '\n';
+            if (item.variants && item.variants.length) {
+                content += '   Другие значения: ' + item.variants.join(', ') + '\n';
+            }
+            if (item.transcription) {
+                content += '   Транскрипция: ' + item.transcription + '\n';
+            }
+            content += '\n';
+        });
+
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'library.txt';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 2000);
+    }
 
     function renderLibrary() {
         const library = loadList(LIB_KEY);
         libraryList.innerHTML = '';
 
         if (library.length === 0) {
-            libraryList.innerHTML = '<p style="color:#888;">Библиотека пока пуста. Выделите текст на странице и нажмите «Сохранить в библиотеке».</p>';
+            libraryList.innerHTML = '<p style="color:#888;">Словарь пока пуст. Выделите текст на странице и нажмите «Сохранить».</p>';
             return;
         }
 
@@ -2787,6 +3044,7 @@ document.addEventListener("DOMContentLoaded", function() {
         renderLibrary();
         libraryModal.style.display = 'block';
     });
+    downloadLibraryBtn.addEventListener('click', downloadLibraryAsText);
     closeLibraryBtn.addEventListener('click', function() {
         libraryModal.style.display = 'none';
     });
