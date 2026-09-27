@@ -2345,7 +2345,7 @@
     </div>
 </div>
 
-<!-- Окно "Библиотека" -->
+<!-- Окно "Словарьа" -->
 <div id="library-modal" style="
     display: none;
     position: fixed;
@@ -2369,7 +2369,7 @@
             justify-content: space-between;
             padding: 14px 18px;
             border-bottom: 1px solid #e0e0e0;">
-            <h2 style="margin: 0; font-size: 18px; color: #333;">📚 Библиотека</h2>
+            <h2 style="margin: 0; font-size: 18px; color: #333;">📚 Словарьа</h2>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button id="download-library" style="
                     padding: 8px 12px;
@@ -2520,7 +2520,7 @@ document.addEventListener("DOMContentLoaded", function() {
     function warnStorageOnce() {
         if (storageWarningShown) return;
         storageWarningShown = true;
-        alert('Внимание: в этом браузере (возможно, включён приватный/инкогнито-режим) не удаётся сохранить данные на устройстве. Библиотека и корзина будут работать только до закрытия страницы.');
+        alert('Внимание: в этом браузере (возможно, включён приватный/инкогнито-режим) не удаётся сохранить данные на устройстве. Словарьа и корзина будут работать только до закрытия страницы.');
     }
 
     function loadList(key) {
@@ -2962,7 +2962,7 @@ document.addEventListener("DOMContentLoaded", function() {
         return btn;
     }
 
-    // ===== Библиотека =====
+    // ===== Словарьа =====
     const libraryModal = document.getElementById('library-modal');
     const libraryList = document.getElementById('library-list');
     const openLibraryBtn = document.getElementById('open-library');
@@ -2972,7 +2972,7 @@ document.addEventListener("DOMContentLoaded", function() {
     function downloadLibraryAsText() {
         const library = loadList(LIB_KEY);
         if (library.length === 0) {
-            alert('Библиотека пуста — скачивать нечего.');
+            alert('Словарьа пуста — скачивать нечего.');
             return;
         }
 
