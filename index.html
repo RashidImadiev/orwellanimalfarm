@@ -57,9 +57,10 @@
                 font-size: 14px !important;
             }
 
-            #selection-toolbar button {
-                padding: 12px 16px !important;
-                font-size: 15px !important;
+            #word-popup button {
+                width: 34px !important;
+                height: 34px !important;
+                font-size: 16px !important;
             }
 
             #library-modal > div,
@@ -2235,6 +2236,18 @@
         К закладке
     </button>
 
+    <button id="save-selection-btn" style="
+        padding: 8px 12px; 
+        background-color: #20c997; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;">
+        Сохранить
+    </button>
+
     <button id="open-library" style="
         padding: 8px 12px; 
         background-color: #6f42c1; 
@@ -2260,9 +2273,9 @@
     </button>
 </div>
 
-<!-- Область с кнопками "Сохранить/Прослушать" и всплывающим окном слова.
-     Расположена ФИКСИРОВАННО под главной панелью (а не под выделенным текстом) —
-     её положение вычисляется один раз в JS относительно нижнего края bookmark-panel. -->
+<!-- Всплывающее окно с переводом выделенного текста.
+     Расположено ФИКСИРОВАННО под главной панелью (а не под выделенным текстом) —
+     его положение вычисляется один раз в JS относительно нижнего края bookmark-panel. -->
 <div id="selection-area" style="
     position: fixed;
     left: 50%;
@@ -2276,39 +2289,7 @@
     max-width: calc(100vw - 20px);
     font-family: sans-serif;">
 
-    <div id="selection-toolbar" style="
-        display: none;
-        gap: 6px;
-        white-space: nowrap;">
-        <button id="save-selection-btn" style="
-            padding: 6px 10px;
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 13px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-            white-space: nowrap;">
-            ⭐ Сохранить
-        </button>
-        <button id="listen-selection-btn" style="
-            padding: 6px 10px;
-            background-color: #17a2b8;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-            font-size: 13px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-            white-space: nowrap;">
-            🔊 Прослушать
-        </button>
-    </div>
-
-    <!-- Всплывающее окно с транскрипцией и вариантами перевода одиночного слова -->
+    <!-- Всплывающее окно с транскрипцией (для слова) и переводом -->
     <div id="word-popup" style="
         display: none;
         min-width: 160px;
@@ -2330,7 +2311,7 @@
                 color: #555;
                 font-size: 14px;
                 flex: 1;">…</span>
-            <button id="word-popup-speak-btn" title="Прослушать произношение" style="
+            <button id="listen-selection-btn" title="Прослушать произношение" style="
                 flex-shrink: 0;
                 width: 28px;
                 height: 28px;
@@ -2801,22 +2782,20 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    // ===== Фиксированная область "Сохранить / Прослушать" под главной панелью =====
+    // ===== Всплывающее окно перевода под главной панелью =====
     const bookContent = document.getElementById('book-content');
     const bookmarkPanel = document.getElementById('bookmark-panel');
     const selectionArea = document.getElementById('selection-area');
-    const selectionToolbar = document.getElementById('selection-toolbar');
     const saveSelBtn = document.getElementById('save-selection-btn');
-    const listenSelBtn = document.getElementById('listen-selection-btn');
-    let currentSelectionText = '';
 
-    // ===== Всплывающее окно с переводом (для одного слова — с транскрипцией
-    // и вариантами значений; для фразы/предложения — с одним переводом по смыслу) =====
+    // ===== Всплывающее окно с переводом (для одного слова — с транскрипцией,
+    // кнопкой озвучки и вариантами значений; для фразы/предложения — кнопка озвучки
+    // остаётся, транскрипция скрыта, перевод один — по смыслу) =====
     const wordPopup = document.getElementById('word-popup');
     const wordPopupTranscriptionRow = document.getElementById('word-popup-transcription-row');
     const wordPopupTranscription = document.getElementById('word-popup-transcription');
     const wordPopupVariants = document.getElementById('word-popup-variants');
-    const wordPopupSpeakBtn = document.getElementById('word-popup-speak-btn');
+    const listenSelBtn = document.getElementById('listen-selection-btn');
     let currentPopupText = '';
     let wordRequestToken = 0;
 
@@ -2826,13 +2805,7 @@ document.addEventListener("DOMContentLoaded", function() {
         wordRequestToken++;
     }
 
-    function hideSaveBtn() {
-        selectionToolbar.style.display = 'none';
-        currentSelectionText = '';
-        hideWordPopup();
-    }
-
-    // Область "Сохранить/Прослушать" всегда стоит чуть ниже главной панели,
+    // Область с окном перевода всегда стоит чуть ниже главной панели,
     // независимо от того, где на странице находится выделенный текст.
     function positionSelectionArea() {
         const rect = bookmarkPanel.getBoundingClientRect();
@@ -2847,10 +2820,13 @@ document.addEventListener("DOMContentLoaded", function() {
 
         wordPopupVariants.textContent = 'Перевод…';
         wordPopup.style.display = 'block';
+        // Кнопка озвучки всегда видна — скрываем только сам текст транскрипции,
+        // когда выделено не одно слово, а фраза или предложение.
+        wordPopupTranscriptionRow.style.display = 'flex';
 
         if (isSingleWord) {
             // Одиночное слово: показываем транскрипцию и несколько вариантов перевода
-            wordPopupTranscriptionRow.style.display = 'flex';
+            wordPopupTranscription.style.display = '';
             wordPopupTranscription.textContent = '…';
 
             const [result, transcription] = await Promise.all([
@@ -2881,8 +2857,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 });
             }
         } else {
-            // Фраза или предложение: только один перевод по смыслу, без транскрипции
-            wordPopupTranscriptionRow.style.display = 'none';
+            // Фраза или предложение: транскрипции нет, но кнопка озвучки остаётся
+            wordPopupTranscription.style.display = 'none';
 
             const result = await translateWithGoogle(text, false);
 
@@ -2895,7 +2871,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    wordPopupSpeakBtn.addEventListener('click', function() {
+    listenSelBtn.addEventListener('click', function() {
         playPronunciation(currentPopupText);
     });
 
@@ -2904,7 +2880,7 @@ document.addEventListener("DOMContentLoaded", function() {
         const text = selection && selection.toString().trim();
 
         if (!text || selection.rangeCount === 0) {
-            hideSaveBtn();
+            hideWordPopup();
             return;
         }
 
@@ -2912,14 +2888,11 @@ document.addEventListener("DOMContentLoaded", function() {
         const anchorNode = range.commonAncestorContainer;
         const container = anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
         if (!bookContent || !bookContent.contains(container)) {
-            hideSaveBtn();
+            hideWordPopup();
             return;
         }
 
         const cleanText = text.replace(/\s+/g, ' ').trim();
-        currentSelectionText = cleanText;
-        selectionToolbar.style.display = 'flex';
-
         const words = cleanText.split(' ').filter(Boolean);
         const isSingleWord = words.length === 1;
 
@@ -2942,18 +2915,42 @@ document.addEventListener("DOMContentLoaded", function() {
     // последующее событие click на мобильных устройствах.
     selectionArea.addEventListener('mousedown', function(e) { e.preventDefault(); });
 
-    listenSelBtn.addEventListener('click', function() {
-        playPronunciation(currentSelectionText);
-    });
-
+    // ===== Кнопка "Сохранить" в главной панели =====
+    // Отображается постоянно. При нажатии проверяет, есть ли в данный момент
+    // выделенный текст внутри книги — если да, сохраняет его в словарь; если нет,
+    // на 2 секунды меняет свою надпись на "Выделите текст" и ничего больше не делает.
     saveSelBtn.addEventListener('click', async function() {
-        const text = currentSelectionText;
-        if (!text) return;
+        const selection = window.getSelection();
+        const rawText = selection ? selection.toString().trim() : '';
 
+        let insideBook = false;
+        if (rawText && selection.rangeCount > 0) {
+            try {
+                const range = selection.getRangeAt(0);
+                const anchorNode = range.commonAncestorContainer;
+                const container = anchorNode.nodeType === 3 ? anchorNode.parentElement : anchorNode;
+                insideBook = !!(bookContent && bookContent.contains(container));
+            } catch (e) {
+                insideBook = false;
+            }
+        }
+
+        if (!rawText || !insideBook) {
+            const originalLabel = saveSelBtn.textContent;
+            saveSelBtn.textContent = 'Выделите текст';
+            setTimeout(function() {
+                saveSelBtn.textContent = originalLabel;
+            }, 2000);
+            return;
+        }
+
+        const text = rawText.replace(/\s+/g, ' ').trim();
+
+        const originalLabel = saveSelBtn.textContent;
         saveSelBtn.textContent = '⏳ Сохраняю...';
         saveSelBtn.disabled = true;
 
-        const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+        const wordCount = text.split(' ').filter(Boolean).length;
         const isSingleWord = wordCount === 1;
 
         const result = await translateWithGoogle(text, isSingleWord);
@@ -2971,9 +2968,8 @@ document.addEventListener("DOMContentLoaded", function() {
         library.push(entry);
         saveList(LIB_KEY, library);
 
-        saveSelBtn.textContent = '⭐ Сохранить';
+        saveSelBtn.textContent = originalLabel;
         saveSelBtn.disabled = false;
-        hideSaveBtn();
         window.getSelection().removeAllRanges();
     });
 
