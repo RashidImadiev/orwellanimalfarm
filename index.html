@@ -2551,60 +2551,103 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
-    // ===== Перевод через Google Translate (публичный веб-эндпоинт, без ключа) =====
+    // ===== Перевод: несколько источников по очереди =====
+    // Публичные бесплатные API иногда перегружены или временно недоступны —
+    // поэтому если основной источник не ответил, автоматически пробуем следующий.
+
+    // Источник 1 (основной): Google Translate (публичный веб-эндпоинт, без ключа)
     // dt=t   — перевод по смыслу (учитывает контекст всей фразы/предложения)
     // dt=bd  — «словарь»: несколько вариантов перевода по частям речи (для одиночных слов)
-    async function translateWithGoogle(text, isSingleWord) {
-        try {
-            let url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t';
-            if (isSingleWord) url += '&dt=bd';
-            url += '&q=' + encodeURIComponent(text);
+    async function translateViaGoogle(text, isSingleWord) {
+        let url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t';
+        if (isSingleWord) url += '&dt=bd';
+        url += '&q=' + encodeURIComponent(text);
 
-            const resp = await fetch(url);
-            const data = await resp.json();
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('google http ' + resp.status);
+        const data = await resp.json();
 
-            let translation = '';
-            if (Array.isArray(data) && Array.isArray(data[0])) {
-                translation = data[0].map(function(seg) {
-                    return (seg && seg[0]) ? seg[0] : '';
-                }).join('');
-            }
-            translation = translation.trim();
-
-            let variants = null;
-            if (isSingleWord && Array.isArray(data[1])) {
-                const seen = new Set();
-                if (translation) seen.add(translation.toLowerCase());
-                const list = [];
-                data[1].forEach(function(posEntry) {
-                    if (Array.isArray(posEntry) && Array.isArray(posEntry[1])) {
-                        posEntry[1].forEach(function(w) {
-                            const key = String(w).toLowerCase();
-                            if (w && !seen.has(key)) {
-                                seen.add(key);
-                                list.push(w);
-                            }
-                        });
-                    }
-                });
-                if (list.length > 0) variants = list.slice(0, 8);
-            }
-
-            return {
-                translation: translation || '(не удалось перевести)',
-                variants: variants
-            };
-        } catch (e) {
-            return { translation: '(перевод недоступен — нет соединения)', variants: null };
+        let translation = '';
+        if (Array.isArray(data) && Array.isArray(data[0])) {
+            translation = data[0].map(function(seg) {
+                return (seg && seg[0]) ? seg[0] : '';
+            }).join('');
         }
+        translation = translation.trim();
+        if (!translation) throw new Error('google empty translation');
+
+        let variants = null;
+        if (isSingleWord && Array.isArray(data[1])) {
+            const seen = new Set();
+            seen.add(translation.toLowerCase());
+            const list = [];
+            data[1].forEach(function(posEntry) {
+                if (Array.isArray(posEntry) && Array.isArray(posEntry[1])) {
+                    posEntry[1].forEach(function(w) {
+                        const key = String(w).toLowerCase();
+                        if (w && !seen.has(key)) {
+                            seen.add(key);
+                            list.push(w);
+                        }
+                    });
+                }
+            });
+            if (list.length > 0) variants = list.slice(0, 8);
+        }
+
+        return { translation: translation, variants: variants };
     }
 
-    // ===== Транскрипция произношения через Wiktionary (для фраз из 3 слов и менее) =====
-    // Берём "сырой" wikitext страницы — там IPA всегда записана в чётком шаблоне
-    // {{IPA|en|/.../}}, в отличие от HTML-вёрстки, которая часто меняется.
-    async function getWordIPA(word) {
-        const clean = word.replace(/[^a-zA-Z'-]/g, '');
-        if (!clean) return null;
+    // Источник 2 (резервный): MyMemory — простой перевод без вариантов значений
+    async function translateViaMyMemory(text) {
+        const url = 'https://api.mymemory.translated.net/get?q=' +
+            encodeURIComponent(text) + '&langpair=en|ru';
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('mymemory http ' + resp.status);
+        const data = await resp.json();
+        const translation = data && data.responseData && data.responseData.translatedText;
+        if (!translation) throw new Error('mymemory empty');
+        return { translation: translation.trim(), variants: null };
+    }
+
+    // Источник 3 (последний резерв): публичный сервер LibreTranslate
+    async function translateViaLibre(text) {
+        const resp = await fetch('https://libretranslate.de/translate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q: text, source: 'en', target: 'ru', format: 'text' })
+        });
+        if (!resp.ok) throw new Error('libre http ' + resp.status);
+        const data = await resp.json();
+        if (!data || !data.translatedText) throw new Error('libre empty');
+        return { translation: data.translatedText.trim(), variants: null };
+    }
+
+    async function translateWithGoogle(text, isSingleWord) {
+        const providers = [
+            function() { return translateViaGoogle(text, isSingleWord); },
+            function() { return translateViaMyMemory(text); },
+            function() { return translateViaLibre(text); }
+        ];
+        for (const provider of providers) {
+            try {
+                const result = await provider();
+                if (result && result.translation) return result;
+            } catch (e) {
+                // не получилось — пробуем следующий источник
+            }
+        }
+        return { translation: '(перевод недоступен — все источники перегружены)', variants: null };
+    }
+
+    // ===== Транскрипция произношения: несколько источников по очереди =====
+    // Если основной источник (Wiktionary) перегружен или не содержит статью —
+    // автоматически пробуем следующий, и так до последнего.
+
+    // Источник 1 (основной): Wiktionary — берём "сырой" wikitext страницы, там
+    // IPA всегда записана в чётком шаблоне {{IPA|en|/.../}}, в отличие от HTML-вёрстки,
+    // которая часто меняется.
+    async function getWordIPAviaWiktionary(clean) {
         try {
             const url = 'https://en.wiktionary.org/w/api.php?action=parse&page=' +
                 encodeURIComponent(clean.toLowerCase()) +
@@ -2627,6 +2670,64 @@ document.addEventListener("DOMContentLoaded", function() {
         } catch (e) {
             return null;
         }
+    }
+
+    // Источник 2 (резервный): dictionaryapi.dev
+    async function getWordIPAviaDictionaryApi(clean) {
+        try {
+            const url = 'https://api.dictionaryapi.dev/api/v2/entries/en/' +
+                encodeURIComponent(clean.toLowerCase());
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                for (const entry of data) {
+                    if (entry.phonetic) return entry.phonetic;
+                    if (Array.isArray(entry.phonetics)) {
+                        for (const p of entry.phonetics) {
+                            if (p.text) return p.text;
+                        }
+                    }
+                }
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Источник 3 (последний резерв): Datamuse — даёт приближённое произношение
+    // в алфавите ARPAbet (не настоящий IPA, но лучше, чем ничего), оборачиваем в [ ].
+    async function getWordIPAviaDatamuse(clean) {
+        try {
+            const url = 'https://api.datamuse.com/words?sp=' +
+                encodeURIComponent(clean.toLowerCase()) + '&md=r&max=1';
+            const resp = await fetch(url);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (Array.isArray(data) && data[0] && Array.isArray(data[0].tags)) {
+                const pronTag = data[0].tags.find(function(t) { return t.indexOf('pron:') === 0; });
+                if (pronTag) {
+                    const approx = pronTag.slice(5).replace(/[0-9]/g, '').toLowerCase();
+                    return '[' + approx + ']';
+                }
+            }
+            return null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function getWordIPA(word) {
+        const clean = word.replace(/[^a-zA-Z'-]/g, '');
+        if (!clean) return null;
+
+        const sources = [getWordIPAviaWiktionary, getWordIPAviaDictionaryApi, getWordIPAviaDatamuse];
+        for (const source of sources) {
+            const result = await source(clean);
+            if (result) return result;
+        }
+        return null;
     }
 
     async function getTranscription(text) {
